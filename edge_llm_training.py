@@ -78,7 +78,7 @@ def main():
     train(model, dataset, tokenizer)
     
     # Save the model
-    output_dir = "edge_llm_model"
+    output_dir = "edge_llm_training_model"
     model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
 

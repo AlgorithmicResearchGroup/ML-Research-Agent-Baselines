@@ -12,7 +12,7 @@ from peft import get_peft_model, LoraConfig, TaskType
 
 # Step 1: Choose a base model
 MODEL_NAME = "mistralai/Mistral-7B-v0.1"
-OUTPUT_DIR = "fine_tuned_model"
+OUTPUT_DIR = "llm_efficiency_model"
 
 # Step 2: Select an open-source dataset
 DATASET_NAME = "databricks/databricks-dolly-15k"

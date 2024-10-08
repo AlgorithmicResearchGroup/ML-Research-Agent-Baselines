@@ -10,15 +10,13 @@ def run_training_script(script_path, gpu_id):
 if __name__ == "__main__":
     # List of training scripts
     training_scripts = [
-        "minipile.py",
-        "math_autoformalization.py",
-        "edge_llm_training.py",
-        "llm_efficiency.py",
-        "babylm.py",
-        "llm_merging.py",
-        "edge_llm_compression.py",
-        "edge_llm_from_scratch.py",
-        "math_autoformalization.py",
+        "babylm.py", #1
+        "edge_llm_compression.py", #2
+        "edge_llm_training.py", #3
+        "llm_efficiency.py", #4
+        "llm_merging.py", #5
+        "math_autoformalization.py", #6
+        "minipile.py", #7
     ]
 
     # Number of available GPUs

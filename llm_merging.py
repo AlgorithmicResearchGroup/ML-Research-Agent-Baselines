@@ -2,7 +2,6 @@ import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
-from merging.LlamaAvg import average_models  # Assuming we're using LlamaAvg.py
 
 # Step 1: Define the models to be merged
 MODEL_NAMES = [
@@ -10,7 +9,7 @@ MODEL_NAMES = [
     "mistralai/Mistral-7B-v0.1",
     "google/gemma-7b",
 ]
-OUTPUT_DIR = "merged_model"
+OUTPUT_DIR = "llm_merging_model"
 
 def load_models_and_tokenizers(model_names):
     models = []
@@ -23,6 +22,32 @@ def load_models_and_tokenizers(model_names):
     return models, tokenizers
 
 # Step 2: Implement the merging process
+def average_models(models):
+    # Ensure all models are on the same device
+    device = models[0].device
+    for model in models[1:]:
+        model.to(device)
+    
+    # Create a new model instance to store the averaged parameters
+    averaged_model = AutoModelForCausalLM.from_pretrained(MODEL_NAMES[0], torch_dtype=torch.float16)
+    averaged_model.to(device)
+    
+    # Get the state dictionaries of all models
+    state_dicts = [model.state_dict() for model in models]
+    
+    # Average the parameters
+    averaged_state_dict = averaged_model.state_dict()
+    for key in averaged_state_dict.keys():
+        if 'weight' in key or 'bias' in key:
+            # Calculate the average of the parameter across all models
+            averaged_state_dict[key] = torch.mean(torch.stack([sd[key].to(device) for sd in state_dicts]), dim=0)
+    
+    # Load the averaged parameters into the new model
+    averaged_model.load_state_dict(averaged_state_dict)
+    
+    print("Model averaging completed successfully.")
+    return averaged_model
+
 def merge_models(models):
     merged_model = average_models(models)
     return merged_model
@@ -49,7 +74,7 @@ def evaluate_model(model, tokenizer, dataset_name):
                 total_correct += 1
         
         elif dataset_name == 'xsum':
-            inputs = tokenizer(sample['input'], return_tensors="pt").to(model.device)
+            inputs = tokenizer(sample['input'], return_tensions="pt").to(model.device)
             outputs = model.generate(**inputs, max_new_tokens=100)
             generated_summary = tokenizer.decode(outputs[0], skip_special_tokens=True)
             
@@ -74,3 +99,6 @@ def main():
     # Evaluate on validation datasets
     evaluate_model(merged_model, tokenizers[0], 'cosmosqa')
     evaluate_model(merged_model, tokenizers[0], 'xsum')
+
+if __name__ == "__main__":
+    main()

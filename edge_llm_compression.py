@@ -2,7 +2,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from torch.nn.utils import prune
 
-OUTPUT_DIR = "compressed_phi2"
+OUTPUT_DIR = "edge_llm_compression_model"
 
 def load_model():
     model = AutoModelForCausalLM.from_pretrained("microsoft/phi-2", torch_dtype=torch.float16)
