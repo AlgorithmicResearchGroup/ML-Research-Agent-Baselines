@@ -15,15 +15,17 @@ def compress_model(model):
         if isinstance(module, torch.nn.Linear):
             prune.l1_unstructured(module, name='weight', amount=0.3)
     
-    # 2. Weight sharing
+    # 2. Weight Sharing
     def share_weights(layer1, layer2):
         layer2.weight = layer1.weight
     
-    for i in range(1, len(model.transformer.h), 2):
-        share_weights(model.transformer.h[i-1].attn.c_attn, model.transformer.h[i].attn.c_attn)
-        share_weights(model.transformer.h[i-1].attn.c_proj, model.transformer.h[i].attn.c_proj)
+    layers = model.gpt_neox.layers
+    for i in range(1, len(layers), 2):
+        # Access the attention modules in GPT-NeoX layers
+        share_weights(layers[i-1].attention.query_key_value, layers[i].attention.query_key_value)
+        share_weights(layers[i-1].attention.dense, layers[i].attention.dense)
     
-    # 3. Reduce model width
+    # 3. Reduce Model Width
     def reduce_width(module, reduction_factor=0.8):
         if isinstance(module, torch.nn.Linear):
             new_out_features = int(module.out_features * reduction_factor)
@@ -31,26 +33,31 @@ def compress_model(model):
             new_bias = module.bias[:new_out_features] if module.bias is not None else None
             
             new_linear = torch.nn.Linear(module.in_features, new_out_features, bias=module.bias is not None)
-            new_linear.weight.data = new_weight.data
+            new_linear.weight.data = new_weight.data.clone()
             if new_bias is not None:
-                new_linear.bias.data = new_bias.data
+                new_linear.bias.data = new_bias.data.clone()
             
             return new_linear
         return module
 
-    for name, module in model.named_children():
-        if isinstance(module, torch.nn.ModuleList):
-            for i, layer in enumerate(module):
-                module[i] = torch.nn.Sequential(*[reduce_width(m) for m in layer.children()])
+    # Apply reduce_width to the linear layers in each GPT-NeoX block
+    for layer in layers:
+        # Reduce the width of attention query_key_value and dense layers
+        layer.attention.query_key_value = reduce_width(layer.attention.query_key_value)
+        layer.attention.dense = reduce_width(layer.attention.dense)
+        # Reduce the width of feed-forward layers
+        layer.mlp.dense_h_to_4h = reduce_width(layer.mlp.dense_h_to_4h)
+        layer.mlp.dense_4h_to_h = reduce_width(layer.mlp.dense_4h_to_h)
     
-    # 4. Remove some layers
+    # 4. Remove Some Layers
     num_layers_to_remove = 2
-    model.transformer.h = model.transformer.h[:-num_layers_to_remove]
+    model.gpt_neox.layers = torch.nn.ModuleList(layers[:-num_layers_to_remove])
     
     return model
 
 def main():
     model, tokenizer = load_model()
+    print(f"Model type: {type(model)}")
     
     print("Original model size:", sum(p.numel() for p in model.parameters()) * 2 / 1024 / 1024, "MB")
     
