@@ -1,4 +1,3 @@
-import os
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
@@ -9,7 +8,7 @@ MODEL_NAMES = [
     "mistralai/Mistral-7B-v0.1",
     "google/gemma-7b",
 ]
-OUTPUT_DIR = "llm_merging_model"
+OUTPUT_DIR = "merged_model"
 
 def load_models_and_tokenizers(model_names):
     models = []
@@ -21,38 +20,30 @@ def load_models_and_tokenizers(model_names):
         tokenizers.append(tokenizer)
     return models, tokenizers
 
-# Step 2: Implement the merging process
-def average_models(models):
-    # Ensure all models are on the same device
-    device = models[0].device
-    for model in models[1:]:
-        model.to(device)
-    
-    # Create a new model instance to store the averaged parameters
-    averaged_model = AutoModelForCausalLM.from_pretrained(MODEL_NAMES[0], torch_dtype=torch.float16)
-    averaged_model.to(device)
-    
-    # Get the state dictionaries of all models
-    state_dicts = [model.state_dict() for model in models]
-    
-    # Average the parameters
-    averaged_state_dict = averaged_model.state_dict()
-    for key in averaged_state_dict.keys():
-        if 'weight' in key or 'bias' in key:
-            # Calculate the average of the parameter across all models
-            averaged_state_dict[key] = torch.mean(torch.stack([sd[key].to(device) for sd in state_dicts]), dim=0)
-    
-    # Load the averaged parameters into the new model
-    averaged_model.load_state_dict(averaged_state_dict)
-    
-    print("Model averaging completed successfully.")
-    return averaged_model
-
 def merge_models(models):
-    merged_model = average_models(models)
+    # Use the first model as the target architecture
+    merged_model = models[0]
+    
+    for layer_name, target_param in merged_model.named_parameters():
+        if 'embed' in layer_name or 'lm_head' in layer_name:
+            # Skip embedding and output layers as they depend on vocabulary size
+            continue
+        
+        # Initialize a list to store compatible parameters
+        compatible_params = [target_param.data]
+        
+        for model in models[1:]:
+            if hasattr(model, layer_name):
+                source_param = getattr(model, layer_name)
+                if source_param.shape == target_param.shape:
+                    compatible_params.append(source_param.data)
+        
+        # Average the compatible parameters
+        if len(compatible_params) > 1:
+            target_param.data = torch.stack(compatible_params).mean(dim=0)
+    
     return merged_model
 
-# Step 3: Evaluate the merged model on validation datasets
 def evaluate_model(model, tokenizer, dataset_name):
     dataset = load_dataset('AlgorithmicResearchGroup/llm_merging', dataset_name)
     
@@ -60,7 +51,7 @@ def evaluate_model(model, tokenizer, dataset_name):
     total_samples = 0
     
     for sample in dataset['train']:
-        if dataset_name == 'cosmosqa':
+        if dataset_name == 'cosmos_qa':
             prompt = f"{sample['input']}\nChoices:\n"
             for i, choice in enumerate(sample['answer_choices']):
                 prompt += f"{i+1}. {choice}\n"
@@ -74,7 +65,7 @@ def evaluate_model(model, tokenizer, dataset_name):
                 total_correct += 1
         
         elif dataset_name == 'xsum':
-            inputs = tokenizer(sample['input'], return_tensions="pt").to(model.device)
+            inputs = tokenizer(sample['input'], return_tensors="pt").to(model.device)
             outputs = model.generate(**inputs, max_new_tokens=100)
             generated_summary = tokenizer.decode(outputs[0], skip_special_tokens=True)
             
@@ -88,8 +79,10 @@ def evaluate_model(model, tokenizer, dataset_name):
     print(f"Accuracy on {dataset_name}: {accuracy:.4f}")
 
 def main():
-    # Load and merge models
+    # Load models
     models, tokenizers = load_models_and_tokenizers(MODEL_NAMES)
+    
+    # Merge models
     merged_model = merge_models(models)
     
     # Save the merged model
@@ -97,7 +90,7 @@ def main():
     tokenizers[0].save_pretrained(OUTPUT_DIR)  # Save the tokenizer of the first model
     
     # Evaluate on validation datasets
-    evaluate_model(merged_model, tokenizers[0], 'cosmosqa')
+    evaluate_model(merged_model, tokenizers[0], 'cosmos_qa')
     evaluate_model(merged_model, tokenizers[0], 'xsum')
 
 if __name__ == "__main__":

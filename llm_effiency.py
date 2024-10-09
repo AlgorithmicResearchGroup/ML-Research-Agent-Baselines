@@ -12,7 +12,7 @@ from peft import get_peft_model, LoraConfig, TaskType
 
 # Step 1: Choose a base model
 MODEL_NAME = "mistralai/Mistral-7B-v0.1"
-OUTPUT_DIR = "llm_efficiency_model"
+OUTPUT_DIR = "fine_tuned_model"
 
 # Step 2: Select an open-source dataset
 DATASET_NAME = "databricks/databricks-dolly-15k"
@@ -44,17 +44,17 @@ def preprocess_function(examples):
 
 tokenized_dataset = dataset.map(preprocess_function, batched=True, remove_columns=['instruction', 'context', 'response', 'category'])
 
-def main():
-    # Set up LoRA for efficient fine-tuning
-    peft_config = LoraConfig(
-        task_type=TaskType.CAUSAL_LM,
-        inference_mode=False,
-        r=8,
-        lora_alpha=32,
-        lora_dropout=0.1,
-    )
-    model = get_peft_model(model, peft_config)
+# Set up LoRA for efficient fine-tuning
+peft_config = LoraConfig(
+    task_type=TaskType.CAUSAL_LM,
+    inference_mode=False,
+    r=8,
+    lora_alpha=32,
+    lora_dropout=0.1,
+)
+model = get_peft_model(model, peft_config)
 
+def main():
     # Step 4: Configure hyperparameters for efficient training
     training_args = TrainingArguments(
         output_dir=OUTPUT_DIR,

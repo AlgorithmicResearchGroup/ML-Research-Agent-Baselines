@@ -30,10 +30,13 @@ def create_model_from_scratch():
 def load_and_preprocess_data():
     dataset = load_dataset("AlgorithmicResearchGroup/babylm")
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-
+    
+    # Set the padding token
+    tokenizer.pad_token = tokenizer.eos_token
+    
     def tokenize_function(examples):
-        return tokenizer(examples["content"], truncation=True, max_length=1024)
-
+        return tokenizer(examples["content"], truncation=True, max_length=1024, padding="max_length")
+    
     tokenized_datasets = dataset.map(tokenize_function, batched=True, remove_columns=["filename", "content"])
     return tokenized_datasets, tokenizer
 
@@ -60,8 +63,11 @@ def create_training_args():
 def main():
     model = create_model_from_scratch()
     tokenized_datasets, tokenizer = load_and_preprocess_data()
+    
+    # Set the padding token for the model
+    model.config.pad_token_id = tokenizer.pad_token_id
+    
     training_args = create_training_args()
-
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -69,9 +75,8 @@ def main():
         eval_dataset=tokenized_datasets["dev"],
         data_collator=DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False),
     )
-
     trainer.train()
-
+    
     # Step 5: Save the model
     trainer.save_model(OUTPUT_DIR)
     tokenizer.save_pretrained(OUTPUT_DIR)
