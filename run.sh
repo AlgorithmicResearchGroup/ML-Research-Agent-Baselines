@@ -1,5 +1,28 @@
 #!/bin/bash
 
+# Function to display usage
+usage() {
+    echo "Usage: $0 --hf_token <your_huggingface_token_here>"
+    exit 1
+}
+
+# Parse command line arguments
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --hf_token) HF_TOKEN="$2"; shift ;;
+        *) usage ;;
+    esac
+    shift
+done
+
+# Check if HF_TOKEN is provided
+if [ -z "$HF_TOKEN" ]; then
+    usage
+fi
+
+# Set Hugging Face CLI environment variable
+export HUGGINGFACE_CLI_TOKEN="$HF_TOKEN"
+
 # List of Python scripts
 scripts=(
     "babylm.py"
