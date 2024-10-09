@@ -34,12 +34,28 @@ scripts=(
     "math_autoformalization.py"
 )
 
+# Array to store PIDs of running processes
+pids=()
+
+# Function to kill all running processes
+cleanup() {
+    echo "Terminating all running scripts..."
+    for pid in "${pids[@]}"; do
+        kill $pid 2>/dev/null
+    done
+    exit 1
+}
+
+# Set up trap to catch SIGINT (Ctrl+C)
+trap cleanup SIGINT
+
 # Function to run a script on a specific GPU
 run_on_gpu() {
     script=$1
     gpu=$2
     echo "Running $script on GPU $gpu"
     CUDA_VISIBLE_DEVICES=$gpu python "$script" &
+    pids+=($!)
 }
 
 # Check if we have enough GPUs
@@ -56,6 +72,8 @@ for i in "${!scripts[@]}"; do
         echo "Warning: Not enough GPUs for ${scripts[$i]}"
     fi
 done
+
+echo "All scripts are running. Press Ctrl+C to terminate all scripts."
 
 # Wait for all background processes to finish
 wait
