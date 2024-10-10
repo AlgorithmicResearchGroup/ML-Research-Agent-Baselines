@@ -1,38 +1,40 @@
 import torch
 from datasets import load_dataset
 from transformers import (
-    RobertaConfig,
-    RobertaForMaskedLM,
-    RobertaTokenizerFast,
+    GPT2Config,
+    GPT2LMHeadModel,
+    GPT2TokenizerFast,
     Trainer,
     TrainingArguments,
     DataCollatorForLanguageModeling,
 )
 
 # Step 1: Set up the model architecture
-MODEL_NAME = "roberta-base"  # We'll use RoBERTa's architecture, but initialize from scratch
-VOCAB_SIZE = 50265  # RoBERTa's vocabulary size
-OUTPUT_DIR = "minipile_model"
+MODEL_NAME = "gpt2"  # We'll use GPT-2's architecture, but initialize from scratch
+VOCAB_SIZE = 50257  # GPT-2's vocabulary size
+OUTPUT_DIR = "minipile_gpt2_model"
 
 def create_model_from_scratch():
-    config = RobertaConfig(
+    config = GPT2Config(
         vocab_size=VOCAB_SIZE,
-        max_position_embeddings=514,
-        num_attention_heads=12,
-        num_hidden_layers=6,
-        type_vocab_size=1,
+        n_positions=1024,
+        n_ctx=1024,
+        n_embd=768,
+        n_layer=6,
+        n_head=12,
     )
-    model = RobertaForMaskedLM(config)
+    model = GPT2LMHeadModel(config)
     model.init_weights()
     return model
 
 # Step 2: Load and preprocess the dataset
 def load_and_preprocess_data():
     dataset = load_dataset("AlgorithmicResearchGroup/minipile")
-    tokenizer = RobertaTokenizerFast.from_pretrained(MODEL_NAME)
+    tokenizer = GPT2TokenizerFast.from_pretrained(MODEL_NAME)
+    tokenizer.pad_token = tokenizer.eos_token  # GPT-2 doesn't have a pad token by default
 
     def tokenize_function(examples):
-        return tokenizer(examples["text"], truncation=True, max_length=512, padding="max_length")
+        return tokenizer(examples["text"], truncation=True, max_length=1024, padding="max_length")
 
     tokenized_datasets = dataset.map(tokenize_function, batched=True, remove_columns=["text"])
     return tokenized_datasets, tokenizer
@@ -43,8 +45,8 @@ def create_training_args():
         output_dir=OUTPUT_DIR,
         overwrite_output_dir=True,
         num_train_epochs=1,  # Adjust based on performance and time constraints
-        per_device_train_batch_size=32,
-        per_device_eval_batch_size=64,
+        per_device_train_batch_size=8,  # Reduced batch size due to GPT-2's larger context
+        per_device_eval_batch_size=16,
         evaluation_strategy="steps",
         eval_steps=10000,
         save_steps=10000,
@@ -69,7 +71,7 @@ def main():
         args=training_args,
         train_dataset=tokenized_datasets["train"],
         eval_dataset=tokenized_datasets["validation"],
-        data_collator=DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=True, mlm_probability=0.15),
+        data_collator=DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False),
     )
 
     trainer.train()
